@@ -948,6 +948,27 @@ func (s *rsaSigner) Sign(rand io.Reader, data []byte) (*Signature, error) {
 	return s.AlgorithmSigner.SignWithAlgorithm(rand, data, s.defaultAlgorithm)
 }
 
+func (s *rsaSigner) PublicKey() PublicKey {
+	return &wrappedPublicKey{wrapped: s.AlgorithmSigner.PublicKey(), algo: s.defaultAlgorithm}
+}
+
+type wrappedPublicKey struct {
+	wrapped PublicKey
+	algo    string
+}
+
+func (w *wrappedPublicKey) Type() string {
+	return w.algo
+}
+
+func (w *wrappedPublicKey) Marshal() []byte {
+	return w.wrapped.Marshal()
+}
+
+func (w *wrappedPublicKey) Verify(data []byte, sig *Signature) error {
+	return w.wrapped.Verify(data, sig)
+}
+
 type wrappedSigner struct {
 	signer crypto.Signer
 	pubKey PublicKey

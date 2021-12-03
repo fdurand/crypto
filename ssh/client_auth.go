@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 )
 
 type authResult int
@@ -217,8 +218,36 @@ func (cb publicKeyCallback) auth(session []byte, user string, c packetConn, rand
 	if err != nil {
 		return authFailure, nil, err
 	}
+	supportedKeyTypes := map[string]struct{}{}
+	if t, ok := c.(*handshakeTransport); ok {
+		algos := t.extensions[ExtServerSigAlgs]
+		if len(algos) > 0 {
+			for _, algo := range strings.Split(string(algos), ",") {
+				supportedKeyTypes[algo] = struct{}{}
+			}
+		}
+	}
+
 	var methods []string
 	for _, signer := range signers {
+		// skip trying unsupported algorithms to reduce the amount of failed auth requests
+		// since failed auth requests can lead to being blocked before a working config is found.
+		if _, exists := supportedKeyTypes[signer.PublicKey().Type()]; !exists {
+			continue
+		}
+
+		// Even servers which do not accept `ssh-rsa` "offer" it potentially in the extension.
+		// Choose the best available alternative if alternatives are available to avoid being rejected.
+		if s, ok := signer.(AlgorithmSigner); ok {
+			if signer.PublicKey().Type() == SigAlgoRSA {
+				if _, exists := supportedKeyTypes[SigAlgoRSASHA2512]; exists {
+					signer = &rsaSigner{s, SigAlgoRSASHA2512}
+				} else if _, exists := supportedKeyTypes[SigAlgoRSASHA2256]; exists {
+					signer = &rsaSigner{s, SigAlgoRSASHA2256}
+				}
+			}
+		}
+
 		ok, err := validateKey(signer.PublicKey(), user, c)
 		if err != nil {
 			return authFailure, nil, err

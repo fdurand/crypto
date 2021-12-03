@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"crypto"
+
 	"golang.org/x/crypto/ed25519"
 	"golang.org/x/crypto/ssh"
 )
@@ -782,6 +783,21 @@ func (s *agentKeyringSigner) SignWithOpts(rand io.Reader, data []byte, opts cryp
 		}
 	}
 	return s.agent.SignWithFlags(s.pub, data, flags)
+}
+
+func (s *agentKeyringSigner) SignWithAlgorithm(rand io.Reader, data []byte, algorithm string) (*ssh.Signature, error) {
+	// The agent has its own entropy source, so the rand argument is ignored.
+	if s.PublicKey().Type() != ssh.SigAlgoRSA {
+		return nil, fmt.Errorf("public key must be of type ssh-rsa, but got %v", s.PublicKey().Type())
+	}
+
+	switch algorithm {
+	case ssh.SigAlgoRSASHA2256:
+		return s.agent.SignWithFlags(s.PublicKey(), data, SignatureFlagRsaSha256)
+	case ssh.SigAlgoRSASHA2512:
+		return s.agent.SignWithFlags(s.PublicKey(), data, SignatureFlagRsaSha512)
+	}
+	return nil, fmt.Errorf("algorithm not supported")
 }
 
 // Calls an extension method. It is up to the agent implementation as to whether or not
