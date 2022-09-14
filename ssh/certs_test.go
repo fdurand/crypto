@@ -266,7 +266,7 @@ func TestCertTypes(t *testing.T) {
 	}
 
 	conf := &ServerConfig{
-		PublicKeyCallback: func(c ConnMetadata, k PublicKey) (*Permissions, error) {
+		PublicKeyCallback: func(c ConnMetadata, k PublicKey, success *bool) (*Permissions, error) {
 			return new(Permissions), nil
 		},
 	}

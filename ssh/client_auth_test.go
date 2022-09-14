@@ -69,14 +69,14 @@ func tryAuthBothSides(t *testing.T, config *ClientConfig, gssAPIWithMICConfig *G
 		},
 	}
 	serverConfig := &ServerConfig{
-		PasswordCallback: func(conn ConnMetadata, pass []byte) (*Permissions, error) {
+		PasswordCallback: func(conn ConnMetadata, pass []byte, success *bool) (*Permissions, error) {
 			if conn.User() == "testuser" && string(pass) == clientPassword {
 				return nil, nil
 			}
 			return nil, errors.New("password auth failed")
 		},
 		PublicKeyCallback: certChecker.Authenticate,
-		KeyboardInteractiveCallback: func(conn ConnMetadata, challenge KeyboardInteractiveChallenge) (*Permissions, error) {
+		KeyboardInteractiveCallback: func(conn ConnMetadata, challenge KeyboardInteractiveChallenge, success *bool) (*Permissions, error) {
 			ans, err := challenge("user",
 				"instruction",
 				[]string{"question1", "question2"},
@@ -209,7 +209,7 @@ func TestClientAuthPasswordExtensions(t *testing.T) {
 	defer c2.Close()
 
 	serverConfig := &ServerConfig{
-		PasswordCallback: func(conn ConnMetadata, pass []byte) (*Permissions, error) {
+		PasswordCallback: func(conn ConnMetadata, pass []byte, success *bool) (*Permissions, error) {
 			if conn.User() == "testuser" && string(pass) == clientPassword {
 				return nil, nil
 			}
@@ -543,7 +543,7 @@ func TestClientLoginCert(t *testing.T) {
 
 func testPermissionsPassing(withPermissions bool, t *testing.T) {
 	serverConfig := &ServerConfig{
-		PublicKeyCallback: func(conn ConnMetadata, key PublicKey) (*Permissions, error) {
+		PublicKeyCallback: func(conn ConnMetadata, key PublicKey, success *bool) (*Permissions, error) {
 			if conn.User() == "nopermissions" {
 				return nil, nil
 			}
@@ -681,7 +681,7 @@ func TestClientAuthMaxAuthTries(t *testing.T) {
 
 	serverConfig := &ServerConfig{
 		MaxAuthTries: 2,
-		PasswordCallback: func(conn ConnMetadata, pass []byte) (*Permissions, error) {
+		PasswordCallback: func(conn ConnMetadata, pass []byte, success *bool) (*Permissions, error) {
 			if conn.User() == "testuser" && string(pass) == "right" {
 				return nil, nil
 			}
@@ -783,7 +783,7 @@ func TestClientAuthErrorList(t *testing.T) {
 		HostKeyCallback: InsecureIgnoreHostKey(),
 	}
 	serverConfig := &ServerConfig{
-		PublicKeyCallback: func(_ ConnMetadata, _ PublicKey) (*Permissions, error) {
+		PublicKeyCallback: func(_ ConnMetadata, _ PublicKey, _ *bool) (*Permissions, error) {
 			return nil, publicKeyErr
 		},
 	}

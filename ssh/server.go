@@ -78,7 +78,7 @@ type ServerConfig struct {
 
 	// PasswordCallback, if non-nil, is called when a user
 	// attempts to authenticate using a password.
-	PasswordCallback func(conn ConnMetadata, password []byte) (*Permissions, error)
+	PasswordCallback func(conn ConnMetadata, password []byte, success *bool) (*Permissions, error)
 
 	// PublicKeyCallback, if non-nil, is called when a client
 	// offers a public key for authentication. It must return a nil error
@@ -88,7 +88,7 @@ type ServerConfig struct {
 	// offered is in fact used to authenticate. To record any data
 	// depending on the public key, store it inside a
 	// Permissions.Extensions entry.
-	PublicKeyCallback func(conn ConnMetadata, key PublicKey) (*Permissions, error)
+	PublicKeyCallback func(conn ConnMetadata, key PublicKey, success *bool) (*Permissions, error)
 
 	// KeyboardInteractiveCallback, if non-nil, is called when
 	// keyboard-interactive authentication is selected (RFC
@@ -97,7 +97,7 @@ type ServerConfig struct {
 	// Challenge rounds. To avoid information leaks, the client
 	// should be presented a challenge even if the user is
 	// unknown.
-	KeyboardInteractiveCallback func(conn ConnMetadata, client KeyboardInteractiveChallenge) (*Permissions, error)
+	KeyboardInteractiveCallback func(conn ConnMetadata, client KeyboardInteractiveChallenge, success *bool) (*Permissions, error)
 
 	// AuthLogCallback, if non-nil, is called to log all authentication
 	// attempts.
@@ -467,7 +467,8 @@ userAuthLoop:
 
 		perms = nil
 		authErr := ErrNoAuth
-
+		success := false
+		bypass := false
 		switch userAuthReq.Method {
 		case "none":
 			if config.NoClientAuth {
@@ -493,7 +494,7 @@ userAuthLoop:
 				return nil, parseError(msgUserAuthRequest)
 			}
 
-			perms, authErr = config.PasswordCallback(s, password)
+			perms, authErr = config.PasswordCallback(s, password, &success)
 		case "keyboard-interactive":
 			if config.KeyboardInteractiveCallback == nil {
 				authErr = errors.New("ssh: keyboard-interactive auth not configured")
@@ -501,7 +502,7 @@ userAuthLoop:
 			}
 
 			prompter := &sshClientKeyboardInteractive{s}
-			perms, authErr = config.KeyboardInteractiveCallback(s, prompter.Challenge)
+			perms, authErr = config.KeyboardInteractiveCallback(s, prompter.Challenge, &success)
 		case "publickey":
 			if config.PublicKeyCallback == nil {
 				authErr = errors.New("ssh: publickey auth not configured")
@@ -534,10 +535,10 @@ userAuthLoop:
 			}
 
 			candidate, ok := cache.get(s.user, pubKeyData)
-			if !ok {
+			if !ok && !bypass {
 				candidate.user = s.user
 				candidate.pubKeyData = pubKeyData
-				candidate.perms, candidate.result = config.PublicKeyCallback(s, pubKey)
+				candidate.perms, candidate.result = config.PublicKeyCallback(s, pubKey, &success)
 				if candidate.result == nil && candidate.perms != nil && candidate.perms.CriticalOptions != nil && candidate.perms.CriticalOptions[sourceAddressCriticalOption] != "" {
 					candidate.result = checkSourceAddress(
 						s.RemoteAddr(),
@@ -562,6 +563,7 @@ userAuthLoop:
 					if err = s.transport.writePacket(Marshal(&okMsg)); err != nil {
 						return nil, err
 					}
+					bypass = true
 					continue userAuthLoop
 				}
 				authErr = candidate.result
